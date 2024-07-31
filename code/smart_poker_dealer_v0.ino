@@ -1,12 +1,13 @@
 #include <Adafruit_SSD1306.h>
+//#include <Adafruit_SH110X.h>
 //#include <EEPROM.h>
 #define screen_enable
 //#define ble_enable
 //#define record_time
 #ifdef screen_enable
-#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
-Adafruit_SSD1306 display(128, 64, &Wire, -1);                                                                                                                                                                                                                                                                       // I2C / TWI
-
+#define SCREEN_ADDRESS 0x3C                    ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+Adafruit_SSD1306 display(128, 64, &Wire, -1);  // I2C / TWI
+//Adafruit_SH1106G display = Adafruit_SH1106G(128, 64, &Wire, -1);
 const unsigned char PROGMEM str_guandan[] ={0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x7C,0x00,0x00,0x00,0x01,0xFF,0x00,0x00,0x00,0x03,0x78,0xC0,0x00,0x00,0x0C,0xAF,0x20,0x00,0x00,0x1F,
 0xDF,0xF0,0x00,0x00,0x3F,0xFF,0xF8,0x00,0x00,0x7F,0xFF,0xFC,0x00,0x00,0x7F,0xFF,0xFC,0x00,0x00,0xFD,0xFF,0xBE,0x00,0x00,0xFF,0xEF,0xFE,0x00,0x00,0xFF,0xC7,0xFE,
 0x20,0x00,0xFF,0x83,0xFE,0x30,0x08,0xCF,0xC7,0x9F,0x78,0x0C,0xB7,0xEF,0x6F,0x78,0x1C,0x7B,0x86,0xE7,0xFC,0x1E,0x7F,0xB9,0xFB,0x7C,0x3F,0xFD,0x7F,0xFC,0xFC,0x3F,
@@ -70,8 +71,9 @@ const unsigned char PROGMEM str_setup[] ={0x00,0x00,0x00,0x18,0x00,0x00,0x00,0x7
 0xFC,0x00,0x34,0x00,0xFB,0xFF,0x80,0xF0,0x00,0x7D,0xFC,0x00,0xF8,0x00,0x7C,0x38,0x00,0xF8,0x00,0x7C,0x10,0x00,0xFC,0x00,0xFC,0x00,0x00,0x1E,0x00,0xF0,0x00,0x00,
 0x0E,0x01,0xE0,0x00,0x00,0x0F,0x83,0xE0,0x00,0x00,0x1F,0x8F,0xF0,0x00,0x00,0x3F,0xE3,0xE0,0x00,0x00,0x1F,0x78,0x00,0x00,0x00,0x0C,0x7C,0x40,0x00,0x00,0x00,0x7C,
 0x00,0x00,0x00,0x00,0x38,0x00,0x00,0x00};
-const unsigned char *Ico_table[5] = {str_guandan, str_doudizhu, str_tao, str_xin, str_mei};
-const unsigned char *Ico_table2[3] = {str_play, str_continue, str_setup};
+const unsigned char *Ico_table[5] = { str_guandan, str_doudizhu, str_tao, str_xin, str_mei };
+const unsigned char *Ico_table2[3] = { str_play, str_continue, str_setup };
+uint8_t mode_selection = 2;
 #endif
 //digital analogwrite conflict; compensate is too much; running time count to debug/ remain card to debug, 4 players in endless loop/ 1st card compensation is not enough
 //_1_2在连续发牌和随机中，均正常使用了定时器中断更稳定的驱动主轴stepper，并且通过高速低速两个表实现了更快的转速，及更好的卡滞的兼容性。
@@ -102,37 +104,41 @@ typedef struct
   unsigned char back;
   unsigned char forward;
   void (*operation)(void);
-}KEY_TABLE;
+} KEY_TABLE;
 
 unsigned char funIndex = 0;
 void (*current)(void);
 void menu_1(void);
 void menu_2(void);
 void menu_running(void);
+void menu_setup(void);
 
-KEY_TABLE menu[]={
-  { 0, 4, 1, 8, 5, (*menu_1) },
-  { 1, 0, 2, 8, 5, (*menu_1) },
-  { 2, 1, 3, 8, 5, (*menu_1) },
-  { 3, 2, 4, 8, 5, (*menu_1) },
-  { 4, 3, 0, 8, 5, (*menu_1) },
-  { 5, 7, 6, 0, 8, (*menu_2) },  
-  { 6, 5, 7, 0, 8, (*menu_2) }, 
-  { 7, 6, 5, 0, 0, (*menu_2) }, 
-  { 8, 5, 5, 5, 5, (*menu_running) }, 
-}; 
+KEY_TABLE menu[] = {
+  { 0, 4, 1, 0, 5, (*menu_1) },
+  { 1, 0, 2, 0, 5, (*menu_1) },
+  { 2, 1, 3, 0, 5, (*menu_1) },
+  { 3, 2, 4, 0, 5, (*menu_1) },
+  { 4, 3, 0, 0, 5, (*menu_1) },
+  { 5, 7, 6, 0, 8, (*menu_2) },
+  { 6, 5, 7, 0, 8, (*menu_2) },
+  { 7, 6, 5, 0, 9, (*menu_2) },
+  { 8, 5, 5, 5, 5, (*menu_running) },
+  { 9, 10, 10, 5, 5, (*menu_setup) },
+  { 10, 9, 9, 5, 5, (*menu_setup) },
+};
 
 void random_mode();
 
-#define touchpad1 5
-#define touchpad2 A3
-#define touchpad3 7
-#define touchpad4 6
-uint8_t touchcount1 = 0;
-uint8_t touchcount2 = 0;
-uint8_t touchcount3 = 0;
-uint8_t touchcount4 = 0;
-uint8_t button_on = 0;
+//touch panel setup
+  #define touchpad1 5
+  #define touchpad2 A3
+  #define touchpad3 7
+  #define touchpad4 6
+  uint8_t touchcount1 = 0;
+  uint8_t touchcount2 = 0;
+  uint8_t touchcount3 = 0;
+  uint8_t touchcount4 = 0;
+  uint8_t button_on = 0;
 
 #define random_mode_go
 #ifdef random_mode_go
@@ -144,70 +150,71 @@ uint8_t randomsq[108];
 #define pcb_industry2
 
 #ifdef pcb_industry2
-#define motora1 3  //timer2
-#define motora2 4
-#define outer_sensor 2  //replace by interrupt 0
-#define cardin A1
-#define steperEN 10  //previous was pin3
-#define steperDIR 8
-#define volread A2
-#define LEDPIN 13
+  #define motora1 3  //timer2
+  #define motora2 4
+  #define outer_sensor 2  //replace by interrupt 0
+  #define cardin A1
+  #define steperEN 10  //previous was pin3
+  #define steperDIR 8
+  #define volread A2
+  #define LEDPIN 13
 #endif
 
 #ifdef pcb_industry1
-#define motora1 3  //timer2
-#define motora2 4
-#define outer_sensor 2  //replace by interrupt 0
-#define cardin A5
-#define steperEN 5  //previous was pin3
-#define steperDIR 10
-#define volread A0
-#define MS1 6
-#define MS2 7
-#define PDN 8
-#define LEDPIN 13
+  #define motora1 3  //timer2
+  #define motora2 4
+  #define outer_sensor 2  //replace by interrupt 0
+  #define cardin A5
+  #define steperEN 5  //previous was pin3
+  #define steperDIR 10
+  #define volread A0
+  #define MS1 6
+  #define MS2 7
+  #define PDN 8
+  #define LEDPIN 13
 #endif
 
-//--------------new para----------------------------------------------------------
-#define STOP 10
-#define CHECK 0
-#define SLIP 1
-#define LOW_ACCEL 2
-#define HIGH_ACCEL 3
-#define HIGH_DECEL 4
-#define LOW_DECEL 5
-#define COUNTRESET 9
+//ISR index
+  #define STOP 10
+  #define CHECK 0
+  #define SLIP 1
+  #define LOW_ACCEL 2
+  #define HIGH_ACCEL 3
+  #define HIGH_DECEL 4
+  #define LOW_DECEL 5
+  #define COUNTRESET 9
 
-
-volatile int slip_step;  // point to start decel
-volatile int loopstep;
-volatile int check_step;           //checkpoint for first card angle compensation, and hold card angle ;
-volatile uint8_t low_accel_step;   // theoratic accel steps
-volatile uint8_t high_accel_step;  // theoratic accel steps
-unsigned int t_total;
-long t_start;
-long initime;
-const int basestep = 10560;
-volatile uint8_t flag = STOP;  //电机状态
-bool mod_one_enable = 0;
-bool random_enable = 0;
-bool fast_break = 1;
-bool goon;
-volatile bool shooted = 0;
-bool startover = 0;  //flag to indicate any error and break many loops
-volatile bool check_point = 0;
-volatile bool loaded = 0;
-volatile bool rotating = 0;
-//volatile bool time0out =0;
-//volatile int await_ms=0;
-uint8_t players = 0;
-uint8_t maxfqy;
-uint16_t bat;
-volatile uint8_t cardout = 0;
-uint8_t totalcards = 0;
-uint8_t holdcards = 0;
-uint8_t motorspeed = 0;
-//byte index_acc; //to indicate the position in the speed table
+//basic parameters
+  volatile int slip_step;  // point to start decel
+  volatile int loopstep;
+  volatile int check_step;           //checkpoint for first card angle compensation, and hold card angle ;
+  volatile uint8_t low_accel_step;   // theoratic accel steps
+  volatile uint8_t high_accel_step;  // theoratic accel steps
+  unsigned int t_total;
+  long t_start;
+  long initime;
+  const int basestep = 10560;
+  volatile uint8_t flag = STOP;  //电机状态
+  uint8_t mode_type = 0;
+  #define mode_1by1 1
+  #define mode_random 2
+  bool fast_break = 1;
+  bool goon;
+  //volatile bool shooted = 0;
+  bool startover = 0;  //flag to indicate any error and break many loops
+  volatile bool check_point = 0;
+  volatile bool loaded = 0;
+  volatile bool rotating = 0;
+  //volatile bool time0out =0;
+  //volatile int await_ms=0;
+  uint8_t players = 0;
+  uint8_t maxfqy;
+  uint16_t bat;
+  volatile uint8_t cardout = 0;
+  uint8_t totalcards = 0;
+  uint8_t holdcards = 0;
+  uint8_t motorspeed = 0;
+  //byte index_acc; //to indicate the position in the speed table
 String SW_V = "240405";
 #ifdef record_time
 uint8_t t = 0;
@@ -245,7 +252,7 @@ void setup() {
   pinMode(LEDPIN, OUTPUT);
   digitalWrite(steperEN, 1);
   digitalWrite(steperDIR, 1);
-  attachInterrupt(0, out_sensor, CHANGE);
+  attachInterrupt(0, out_sensor_change, CHANGE);
   TCCR1A = 0;                  //将整个TCCR1A寄存器设置为0
   TCCR1B = 0;                  //将整个TCCR1B寄存器设置为0
   TIMSK1 &= (~(1 << OCIE1A));  //ISR disable
@@ -261,35 +268,39 @@ void setup() {
   OCR1A = pgm_read_word_near(low_speed_table + 0);
   flashing(1000, 500, 2);
 #ifdef screen_enable
-display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS);
-  display.setTextSize(2); // Draw 1X-scale text
+  display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS);
+  //display.begin(SCREEN_ADDRESS, true); // Address 0x3C default
+  display.setTextSize(2);  // Draw 1X-scale text
   display.setTextColor(SSD1306_WHITE);
-display.clearDisplay();
-for(byte i=0;i<65;i=i+2)
-{
-display.fillRect(10,i-2, 40,40,0);
-display.drawBitmap(10,i, Ico_table[3],40,40,1);
-display.fillRect(78,i-42, 40,42,0);
-display.drawBitmap(78,i-40, Ico_table[2],40,40,1);
-display.display();}
-for(byte i=0;i<41;i=i+2)
-{
-display.fillRect(10,i-2, 40,40,0);
-display.drawBitmap(10,i, Ico_table[1],40,40,1);
-display.fillRect(78,i+22, 40,42,0);
-display.drawBitmap(78,i+24, Ico_table[2],40,40,1);
-display.display();}
-for(byte i=0;i<64;i=i+2)
-{
-display.fillRect(10,i+39, 40,40,0);
-display.drawBitmap(10,i+40, Ico_table[1],40,40,1);
-display.fillRect(78,i, 40,40,0);
-display.drawBitmap(78,i, Ico_table[0],40,40,1);
-display.display();}
-draw_bat();
-display.setCursor(5, 24);
-display.println(F("GOODLUCK"));
-display.display();
+  //display.setTextColor(SH110X_WHITE);
+  display.clearDisplay();
+  for (byte i = 0; i < 65; i = i + 2) {
+    display.fillRect(10, i - 2, 40, 40, 0);
+    display.drawBitmap(10, i, Ico_table[3], 40, 40, 1);
+    display.fillRect(78, i - 42, 40, 42, 0);
+    display.drawBitmap(78, i - 40, Ico_table[2], 40, 40, 1);
+    display.display();
+  }
+  for (byte i = 0; i < 41; i = i + 2) {
+    display.fillRect(10, i - 2, 40, 40, 0);
+    display.drawBitmap(10, i, Ico_table[1], 40, 40, 1);
+    display.fillRect(78, i + 22, 40, 42, 0);
+    display.drawBitmap(78, i + 24, Ico_table[2], 40, 40, 1);
+    display.display();
+  }
+  for (byte i = 0; i < 64; i = i + 2) {
+    display.fillRect(10, i + 39, 40, 40, 0);
+    display.drawBitmap(10, i + 40, Ico_table[1], 40, 40, 1);
+    display.fillRect(78, i, 40, 40, 0);
+    display.drawBitmap(78, i, Ico_table[0], 40, 40, 1);
+    display.display();
+  }
+  draw_bat();
+  display.setCursor(5, 24);
+  display.println(F("GOODLUCK"));
+  display.display();
+  delay(1000);
+  menu_1();
 #endif
 }
 
@@ -302,11 +313,9 @@ void flashing(int i, int j, int k) {
   }
 }
 
-void out_sensor() {
-  shooted = !shooted;
-  if (shooted == 0) {
-    loaded = 1;
-  }  //no matter what's previous status, start to accel
+void out_sensor_change() {
+  loaded = !loaded;
+  //no matter what's previous status, start to accel
 }
 
 ISR(TIMER1_COMPA_vect) {
@@ -324,15 +333,15 @@ ISR(TIMER1_COMPA_vect) {
     if (twice_coe) {
       step_count++;
       if (step_count > loopstep) {
-        if (mod_one_enable) { step_count = 0; }
+        if (mode_type == mode_1by1) { step_count = 0;}
       }
       switch (flag) {
         case CHECK:
           if (step_count == check_step) {  //in case >=, when load quick, and flag -> accel, will activate the checkpoint1 加载时标志位变成accel, 但是step_count大于check，point会置1，跳出第一个等待循环
             check_point = 1;
-            if (mod_one_enable) {
+            if (mode_type == mode_1by1) {
               flag = SLIP;
-            } else if (random_enable) {
+            } else if (mode_type == mode_random) {
               flag = HIGH_DECEL;
             }
           }
@@ -340,14 +349,14 @@ ISR(TIMER1_COMPA_vect) {
 
         case SLIP:
           if (step_count >= slip_step) {  //must be >= could be interrupt by hardware interrupt
-            if (loaded) {
-            } else {
+            //if (loaded) {
+            //} else {
               if (high_accel_step) {
                 flag = HIGH_DECEL;
               } else {
                 flag = LOW_DECEL;
               }
-            }
+            //}
           }
           break;
 
@@ -441,8 +450,7 @@ void stoprun() {
   digitalWrite(motora1, 1);
   digitalWrite(motora2, 1);
   flag = HIGH_DECEL;
-  mod_one_enable = 0;
-  random_enable = 0;
+  mode_type = 0;
 #ifdef record_time
   for (int i = 0; i < t; i++) {
     Serial.println(duration[i]);
@@ -458,7 +466,6 @@ void stoprun() {
 void softload() {
   uint8_t i = 255;
   uint8_t j = 255;
-  loaded = 0;
   digitalWrite(motora2, 1);
   while (loaded == 0) {
     if (i > 0) { i = i - 5; }
@@ -475,8 +482,8 @@ void softload() {
 
 void firstcard() {                                     //no timeout check yet, no goon mode yet
   if (!goon) { totalcards = totalcards - holdcards; }  //to recaculate totalcard after boardcast, for mod0
-  shooted = !digitalRead(out_sensor);
-  loaded = !shooted;
+  loaded = !digitalRead(outer_sensor);
+  //shooted = !loaded;
   //to reset the check step here for mod0
   check_step = slip_step - 30000 / maxfqy * 3;  //180ms how take how many steps, per player step -
   if (check_step < 3) { check_step = 3; }
@@ -496,6 +503,7 @@ void firstcard() {                                     //no timeout check yet, n
     }
   }
   shoot_check(250, 2);
+  if (startover) { return; }
   cardout++;
   if (digitalRead(cardin)) {
     FC_print(0);
@@ -508,8 +516,7 @@ void firstcard() {                                     //no timeout check yet, n
   flag = LOW_ACCEL;
   check_point = 0;
   TIMSK1 |= (1 << OCIE1A);  //start to rotate
-  while (check_point == 0)
-    ;  //to reach the check point
+  while (check_point == 0);  //to reach the check point
   flag = COUNTRESET;
   //loaded = 1;                                     //don't decel and stop
   check_step = low_accel_step + high_accel_step + 3;  //reset the check point, step+1转high, step+2转flag check,step+3进入check flag;
@@ -550,7 +557,7 @@ void shoot_check(uint8_t j, uint8_t k) {
   TIMSK0 &= (~(1 << TOIE0));
   time0count = 0;
   TIMSK0 |= (1 << TOIE0);
-  while (shooted == 0) {
+  while (loaded) {
     if (time0count > j) {  //
       FC_print(k);
       return;
@@ -560,7 +567,7 @@ void shoot_check(uint8_t j, uint8_t k) {
   duration[t] = time0count;
   t++;
 #endif
-  loaded = 0;
+  //loaded = 0;
 }
 
 void load_check(uint16_t j, uint8_t k) {
@@ -583,8 +590,8 @@ void card_shoot() {
   digitalWrite(motora1, 0);
   //digitalWrite(motora2, 1);
   shoot_check(250, 2);
-  cardout++;
   if (startover) { return; }
+  cardout++;
   if (flag == STOP) {
     FC_print(2);
     return;
@@ -623,6 +630,8 @@ void card_shoot() {
   if (flag == STOP) {
     //rotating = 1;      //to reset rotating flag
     flag = LOW_ACCEL;  //later to set up speed tuning
+    digitalWrite(steperEN, 0);
+    TIMSK1 |= (1 << OCIE1A);
     //FC_print(1);
     //return;
   } else {
@@ -632,18 +641,18 @@ void card_shoot() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  if (mod_one_enable) {
+  if (mode_type == mode_1by1) {
     firstcard();
     ;
-    while (mod_one_enable) {
+    while (mode_type == mode_1by1) {
       while (check_point == 0)
         ;
       card_shoot();
       check_point = 0;
       if (startover) { break; }
     }
-    mod_one_enable = 0;
-  } else if (random_enable) {
+    mode_type = 0;
+  } else if (mode_type == mode_random) {
     random_mode();
   } else if (startover) {
     startover = 0;
@@ -661,11 +670,14 @@ void loop() {
 }
 
 void batcheck() {
-  bat = analogRead(volread); 
-  if(bat>470){bat=470;}
-  else if(bat<330){bat=330;}
-  bat= bat-330;
-  bat= map(bat,0,140,0,4);
+  bat = analogRead(volread);
+  if (bat > 470) {
+    bat = 470;
+  } else if (bat < 330) {
+    bat = 330;
+  }
+  bat = bat - 330;
+  bat = map(bat, 0, 140, 0, 4);
   /*
 byte bat1;
 if (bt==1023) {Serial.println("FC20");return;} //99 stand for failure, 002 MCU REF V is grounded
@@ -697,7 +709,7 @@ void FC_print(byte i) {
     case 5:
       startover = 0;
       flashing(600, 200, 2);
-      Serial.println((String) "Mod" + random_enable + " Cd" + totalcards + " H=" + holdcards + " P=" + players + " Spd" + maxfqy + " Bat=" + bat + " SW" + SW_V);
+      Serial.println((String) "Mod" + mode_type + " Cd" + totalcards + " H=" + holdcards + " P=" + players + " Spd" + maxfqy + " Bat=" + bat + " SW" + SW_V);
       break;
     case 4:
       stoprun();
@@ -716,17 +728,29 @@ void FC_print(byte i) {
   }
 #endif
 #ifdef screen_enable
-stoprun();
-startover=1;
-display.clearDisplay();
-switch(i){
-case 0: display.setCursor(15, 24);display.println(F("FC00"));break;//display.setCursor(5, 24);display.println(string(holdcards + totalcards - cardout));display.setCursor(45, 24);display.println(F("MISSING"));
-case 1: display.setCursor(15, 24);display.println(F("FC01"));break;
-case 2: display.setCursor(15, 24);display.println(F("FC02"));break;
-case 6: display.setCursor(15, 24);display.println(F("ENJOY!"));break;
-default: break;
-}
-display.display();
+  stoprun();
+  startover = 1;
+  display.clearDisplay();
+  switch (i) {
+    case 0:
+      display.setCursor(15, 24);
+      display.println(F("FC00"));
+      break;  //display.setCursor(5, 24);display.println(string(holdcards + totalcards - cardout));display.setCursor(45, 24);display.println(F("MISSING"));
+    case 1:
+      display.setCursor(15, 24);
+      display.println(F("FC01"));
+      break;
+    case 2:
+      display.setCursor(15, 24);
+      display.println(F("FC02"));
+      break;
+    case 6:
+      display.setCursor(15, 24);
+      display.println(F("ENJOY!"));
+      break;
+    default: break;
+  }
+  display.display();
 #endif
 }
 
@@ -734,13 +758,13 @@ void ButtonCheck() {
   while (1) {
     if (digitalRead(touchpad1)) {
       //Serial.println("Button1 On");
-      button_on = 0; //up
+      button_on = 0;  //up
       touchcounting(touchpad1);
       break;
     }
     if (digitalRead(touchpad2)) {
       //Serial.println("Button2 On");
-      button_on = 2; //down
+      button_on = 2;  //down
       touchcounting(touchpad2);
       break;
     }
@@ -752,7 +776,7 @@ void ButtonCheck() {
     }
     if (digitalRead(touchpad4)) {
       //Serial.println("Button4 On");
-      button_on = 1; //gogo
+      button_on = 1;  //gogo
       touchcounting(touchpad4);
       break;
     }
@@ -787,7 +811,10 @@ void touchevent(uint8_t i) {
 
   switch (i)  //获取按键对应序号
   {
-    case 1: setup_save(funIndex); funIndex = menu[funIndex].forward; break;
+    case 1:
+      setup_save(funIndex);
+      funIndex = menu[funIndex].forward;
+      break;
     case 3: funIndex = menu[funIndex].back; break;
     case 2: funIndex = menu[funIndex].down; break;
     case 0: funIndex = menu[funIndex].up; break;
@@ -796,90 +823,157 @@ void touchevent(uint8_t i) {
   (*current)();                        //执行获取到的函数
 }
 
-void setup_save(int i)
-{
-if (funIndex<5)  
-{
-switch(i)
-{
-  case 0: totalcards=108;holdcards=0;players=4;maxfqy=30;break;
-    case 1: totalcards=54;holdcards=3;players=3;maxfqy=30;break;
-      case 2: totalcards=54;holdcards=0;players=3;maxfqy=30;break;
-        case 3: totalcards=108;holdcards=8;players=4;maxfqy=80;break;
-          case 4: totalcards=52;holdcards=0;players=4;maxfqy=36;break;
-}    
-speed_table_lookup();
-loopstep = basestep / players;
-slip_step = loopstep - (high_accel_step + low_accel_step);  // slip until that step, not pure slip step
-motorspeed=255;
-fast_break=1;
-}
-else if (funIndex==5){cardout=0;random_enable=1;}
-else if (funIndex==6){random_enable=1;}
-else if (funIndex==7){}
-}
-
-void menu_1() {
-display.clearDisplay();
-display.drawBitmap(56+40*(button_on-1),21, Ico_table[funIndex],40,40,1);
-display.drawBitmap(56-40*(button_on-1),21, Ico_table[((funIndex+4-button_on)%5)],40,40,1);
-draw_bat();
-display.display();
-delay(100);
-display.clearDisplay();
-display.drawBitmap(44,21, Ico_table[funIndex],40,40,1);
-display.drawBitmap(-20,21, Ico_table[((funIndex+4)%5)],40,40,1);
-display.drawBitmap(108,21, Ico_table[((funIndex+1)%5)],40,40,1);
-draw_bat();
-switch(funIndex){
-case 0: display.setCursor(0, 0);display.println(F("GUANDAN"));break;
-case 1: display.setCursor(0, 0);display.println(F("DOUDIZHU"));break;
-case 2: display.setCursor(0, 0);display.println(F("BLACK5"));break;
-case 3: display.setCursor(0, 0);display.println(F("FREEMODE1"));break;
-case 4: display.setCursor(0, 0);display.println(F("FREEMODE2"));break;
-}
-display.display();
-}
-
-void menu_2() {
-display.clearDisplay();
-display.drawBitmap(56+40*(button_on-1),21, Ico_table2[(funIndex-5)],40,40,1);
-display.drawBitmap(56-40*(button_on-1),21, Ico_table2[((funIndex-3-button_on)%3)],40,40,1);
-draw_bat();
-display.display();
-delay(100);
-display.clearDisplay();
-display.drawBitmap(44,21, Ico_table2[(funIndex-5)],40,40,1);
-display.drawBitmap(-20,21, Ico_table2[((funIndex-3)%3)],40,40,1);
-display.drawBitmap(108,21, Ico_table2[((funIndex-4)%3)],40,40,1);
-draw_bat();
-switch(funIndex){
-case 5: display.setCursor(1, 1);display.println(F("RUN"));break;
-case 6: display.setCursor(1, 1);display.println(F("CONTINUE"));break;
-case 7: display.setCursor(1, 1);display.println(F("SETUP"));break;
-}
-display.display();
+void setup_save(int i) {
+  if (funIndex < 5) {
+    switch (i) {
+      case 0:
+        totalcards = 108;
+        holdcards = 0;
+        players = 4;
+        maxfqy = 30;
+        break;
+      case 1:
+        totalcards = 54;
+        holdcards = 3;
+        players = 3;
+        maxfqy = 30;
+        break;
+      case 2:
+        totalcards = 54;
+        holdcards = 0;
+        players = 3;
+        maxfqy = 30;
+        break;
+      case 3:
+        totalcards = 108;
+        holdcards = 8;
+        players = 4;
+        maxfqy = 80;
+        break;
+      case 4:
+        totalcards = 52;
+        holdcards = 0;
+        players = 4;
+        maxfqy = 36;
+        break;
+    }
+    speed_table_lookup();
+    loopstep = basestep / players;
+    slip_step = loopstep - (high_accel_step + low_accel_step);  // slip until that step, not pure slip step
+    motorspeed = 255;
+    fast_break = 1;
+  } else if (funIndex == 5) {
+    goon = 0;
+    cardout = 0;
+    mode_type = mode_selection;
+  } else if (funIndex == 6) {
+    goon = 1;
+    mode_type = mode_selection;
+  } else if (funIndex == 9) {
+    mode_selection = mode_random;
+  } else if (funIndex == 10) {
+    mode_selection = mode_1by1;
+  }
 }
 
-void draw_bat()
-{
-batcheck(); 
-//display.setCursor(96, 0);display.println(bat);
-display.drawRect(111,2,15,8,1);//outline
-if(bat>0){
-  for (byte i=0;i<bat;i++)
-  {display.fillRect(113+i*3,4,2,4,1);}
-}
-display.drawLine(126,5,126,7,1);
+void menu_1() {  //mode selection
+  display.clearDisplay();
+  display.drawBitmap(56 + 40 * (button_on - 1), 21, Ico_table[funIndex], 40, 40, 1);
+  display.drawBitmap(56 - 40 * (button_on - 1), 21, Ico_table[((funIndex + 4 - button_on) % 5)], 40, 40, 1);
+  draw_bat();
+  display.display();
+  delay(100);
+  display.clearDisplay();
+  display.drawBitmap(44, 21, Ico_table[funIndex], 40, 40, 1);
+  display.drawBitmap(-20, 21, Ico_table[((funIndex + 4) % 5)], 40, 40, 1);
+  display.drawBitmap(108, 21, Ico_table[((funIndex + 1) % 5)], 40, 40, 1);
+  draw_bat();
+  switch (funIndex) {
+    case 0:
+      display.setCursor(0, 0);
+      display.println(F("GUANDAN"));
+      break;
+    case 1:
+      display.setCursor(0, 0);
+      display.println(F("DOUDIZHU"));
+      break;
+    case 2:
+      display.setCursor(0, 0);
+      display.println(F("BLACK5"));
+      break;
+    case 3:
+      display.setCursor(0, 0);
+      display.println(F("FREEMODE1"));
+      break;
+    case 4:
+      display.setCursor(0, 0);
+      display.println(F("FREEMODE2"));
+      break;
+  }
+  display.display();
 }
 
-void menu_running()
-{
-display.clearDisplay();
-display.setCursor(15, 24);
-display.println(F("RUNNING"));
-//draw_bat();
-display.display();
+void menu_2() {  //action selection
+  display.clearDisplay();
+  display.drawBitmap(56 + 40 * (button_on - 1), 21, Ico_table2[(funIndex - 5)], 40, 40, 1);
+  display.drawBitmap(56 - 40 * (button_on - 1), 21, Ico_table2[((funIndex - 3 - button_on) % 3)], 40, 40, 1);
+  draw_bat();
+  display.display();
+  delay(100);
+  display.clearDisplay();
+  display.drawBitmap(44, 21, Ico_table2[(funIndex - 5)], 40, 40, 1);
+  display.drawBitmap(-20, 21, Ico_table2[((funIndex - 3) % 3)], 40, 40, 1);
+  display.drawBitmap(108, 21, Ico_table2[((funIndex - 4) % 3)], 40, 40, 1);
+  draw_bat();
+  switch (funIndex) {
+    case 5:
+      display.setCursor(1, 1);
+      display.println(F("RUN"));
+      break;
+    case 6:
+      display.setCursor(1, 1);
+      display.println(F("CONTINUE"));
+      break;
+    case 7:
+      display.setCursor(1, 1);
+      display.println(F("SETUP"));
+      break;
+  }
+  display.display();
+}
+
+void draw_bat() {
+  batcheck();
+  //display.setCursor(96, 0);display.println(bat);
+  display.drawRect(111, 2, 15, 8, 1);  //outline
+  if (bat > 0) {
+    for (byte i = 0; i < bat; i++) { display.fillRect(113 + i * 3, 4, 2, 4, 1); }
+  }
+  display.drawLine(126, 5, 126, 7, 1);
+}
+
+void menu_running() {
+  display.clearDisplay();
+  display.setCursor(15, 24);
+  display.println(F("RUNNING"));
+  //draw_bat();
+  display.display();
+}
+
+void menu_setup() {
+  display.clearDisplay();
+  draw_bat();
+  switch (funIndex) {
+    case 9:
+      display.setCursor(1, 22);
+      display.println(F("MODE_RANDOM"));
+      break;
+    case 10:
+      display.setCursor(1, 22);
+      display.println(F("MODE_1BY1"));
+      break;
+  }
+  display.display();
 }
 
 void fisher_yates() {
@@ -929,9 +1023,9 @@ void random_mode() {
   int half_step = loopstep / 2;
   int delta;
   uint8_t dir;
-  shooted = !digitalRead(out_sensor);  // if 1, no card = shooted, and not loaded
+  loaded = !digitalRead(outer_sensor);  // if 1, no card = shooted, and not loaded
   uint8_t abs_angle;
-  if (goon==0) {
+  if (goon == 0) {
     fisher_yates();                //to get the random sequence
     if (randomsq[0] == players) {  //in case first card at the holdcard position
       check_step = half_step - high_accel_step - low_accel_step;
@@ -951,7 +1045,9 @@ void random_mode() {
       //Serial.print(check_step);
       startstop();  // move to the 1st card position
     }
-    if (shooted) {  //if not load, to load
+    loaded = !digitalRead(outer_sensor);
+    //shooted=!loaded;
+    if (!loaded) {  //if not load, to load
       softload();
       if (loaded == 0) { FC_print(1); }
       if (startover) {
@@ -963,10 +1059,10 @@ void random_mode() {
     }
     digitalWrite(motora1, 0);
     shoot_check(250, 2);
-    cardout ++;
     if (startover) {
       return;
     }
+    cardout++;
     /*if (digitalRead(cardin) == 1)  //in case no more card, stop rolling imediately
   {
     FC_print(0);
@@ -1026,7 +1122,8 @@ void random_mode() {
     }
     digitalWrite(motora1, 0);
     shoot_check(250, 2);
-    cardout ++;
+    if (startover){return;}
+    cardout++;
     //Serial.print(cardout);
     if (startover) {
       return;
@@ -1078,7 +1175,7 @@ void modeset() {
     bool dir = command[5];
     digitalWrite(steperDIR, dir);
     uint8_t speed_coe = command[6];  //basespeed= 180 - speed_coe*7; //need calibration, typical5, for sample C =7 for a trial
-    random_enable = command[7];
+    mode_type = command[7];
     fast_break = command[8];  //in case 0
     motorspeed = speed_coe;   //to update acc to break mode
     batcheck();
@@ -1094,14 +1191,13 @@ void modeset() {
   } else {
     if (startover) {  // to judge if it really needs continue mode
       startover = 0;
-      random_enable = command[7];
+      mode_type = command[7];
       FC_print(5);
     } else {
       FC_print(10);
       return;
     }
   }
-  mod_one_enable = !random_enable;  //
   if (digitalRead(cardin) == 1) {
     FC_print(0);
     return;
