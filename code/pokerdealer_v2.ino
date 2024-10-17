@@ -1352,3 +1352,77 @@ void modeset() {
   }
 }
 #endif
+
+void face_lowbat(){
+      display.fillRoundRect(11, 53, 35, 5, 2, 1);
+      display.fillRoundRect(84, 53, 35, 5, 2, 1);
+      display.drawLine(29, 11, 29, 37, 1);//bat outline
+      display.drawLine(30, 10, 56, 10, 1);//bat outline
+      display.drawLine(57, 10, 64, 17, 1);//break1
+      display.drawLine(65, 18, 58, 25, 1);//break1
+      display.drawLine(57, 26, 63, 32, 1);//break1
+      display.drawLine(64, 33, 58, 38, 1);//break1
+      display.drawLine(30, 38, 57, 38, 1);//bat outline
+      display.drawLine(60, 10, 67, 17, 1);//break2
+      display.drawLine(68, 18, 61, 25, 1);//break2
+      display.drawLine(60, 26, 66, 32, 1);//break2
+      display.drawLine(67, 33, 61, 38, 1);//break2
+      display.drawLine(94, 10, 94, 38, 1);//bat outline
+      display.drawLine(61, 10, 94, 10, 1);//bat outline
+      display.drawLine(62, 38, 94, 38, 1);//bat outline
+      display.drawRect(95, 19, 6, 14, 1);
+}
+
+void face_workhard(){
+  display.fillRect(1, 9, 126, 8, 1);
+  display.fillCircle(31, 45, 12, 1);//eye
+  display.fillCircle(99, 45, 12, 1);//eye
+  display.fillCircle(34, 39, 3, 0);//eye
+  display.fillCircle(96, 39, 3, 0);//eye
+  display.drawLine(24, 19, 38, 34, 1);//elbow
+  display.drawLine(86, 38, 112, 23, 1);
+}
+
+void face_error(){
+  display.drawLine(8, 35, 35, 58, 1);
+  display.drawLine(8, 36, 35, 59, 1);
+  display.drawLine(8, 58, 35, 35, 1);
+  display.drawLine(8, 59, 35, 36, 1);
+  display.drawLine(94, 35, 122, 58, 1);
+  display.drawLine(94, 36, 122, 59, 1);
+  display.drawLine(94, 58, 122, 35, 1);
+  display.drawLine(94, 59, 122, 36, 1);
+}
+
+void face_happy(){
+  display.fillCircle(23, 47, 16, 1);//eye
+  display.fillCircle(23, 47, 12, 0);
+  display.fillRect(7, 42, 34, 22, 0);
+  display.fillCircle(106, 47, 16, 1);//eye
+  display.fillCircle(106, 47, 12, 0);
+  display.fillRect(90, 42, 34, 22, 0);
+}
+
+void face_surprise(){
+  display.fillCircle(20, 44, 14, 1);
+  display.fillCircle(108, 44, 14, 1);
+  display.fillCircle(20, 44, 5, 0);
+  display.fillCircle(108, 44, 5, 0);
+}
+
+void face_sad(){
+  display.fillCircle(28, 47, 12, 1);
+  display.fillCircle(102, 47, 12, 1);
+  display.drawLine(8, 38, 38, 20, 1);
+  display.drawLine(91, 20, 119, 38, 1);
+}
+
+void face_sleepy(){
+      display.fillRoundRect(6, 36, 28, 16, 8, 1);
+      display.fillRoundRect(94, 36, 28, 16, 8, 1);
+}
+
+void smartspeedctrl(){
+  uint16_t maxfqy_check = timeout * 200 / slip_step * 2;  //to calculate proper maxfqy to support continues smooth running
+  if (maxfqy_check > maxfqy) { maxfqy = maxfqy_check; }      //need further diagnose  - in case gap is large and repeated
+}
