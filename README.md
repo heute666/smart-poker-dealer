@@ -1,4 +1,5 @@
 # smart-poker-dealer
+20250202: V2.3 BOM updated, to add comment and mistake correction;
 20241114: V2 BOM updated; stepper gear (10 teeth) stp uploaded in "stl" folder - for custom design change acc. to different stepper shaft;
 
 20241017: V2 is releasing - an emotional bot with more stable performance
