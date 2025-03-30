@@ -1,4 +1,5 @@
 # smart-poker-dealer
+20250330: V2.4 BOM updated, to add details of "cardout sensor", stepper ISR improvement for more stable performance when weight load is high;
 20250202: V2.3 BOM updated, to add comment and mistake correction;
 20241114: V2 BOM updated; stepper gear (10 teeth) stp uploaded in "stl" folder - for custom design change acc. to different stepper shaft;
 
