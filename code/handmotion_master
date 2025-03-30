@@ -1,0 +1,129 @@
+/* Get all possible data from MPU6050
+ * Accelerometer values are given as multiple of the gravity [1g = 9.81 m/s²]
+ * Gyro values are given in deg/s
+ * Angles are given in degrees
+ * Note that X and Y are tilt angles and not pitch/roll.
+ *
+ * License: MIT
+ */
+
+#include "Wire.h"
+#include <MPU6050_light.h>
+#define rotate_pin 4
+#define shoot_pin 3
+
+MPU6050 mpu(Wire);
+
+long timer = 0;
+int x_acc;
+int y_acc;
+int z_acc;
+int xyz_acc;
+int x_angle;
+int x_ori_angle=0;
+int y_angle;
+int y_ori_angle=0;
+int z_angle;
+int z_ori_angle=0;
+byte pre_val=0;
+int delta_x =0;
+//int delta_y =0;
+int delta_z =0;
+int acc_max =0;
+bool rotating=0;
+bool shooting=0;
+unsigned char command[2]={0x00,0x09};
+volatile int data;
+
+void setup() {
+  Serial.begin(9600);
+  Wire.begin();
+  pinMode(13, OUTPUT);
+  byte status = mpu.begin();
+  //while(status==0){flashing(1000,1000,1); } // stop everything if could not connect to MPU6050
+  while(Serial.available()==0)
+  {Serial.write(command,2);flashing(500,500,1);}//to activate the motion mode every 1s until a respond
+  while(Serial.available()>0){data=Serial.read();Serial.print(data);} 
+  Serial.print("connected");
+  //flashing(500,500,2);
+  digitalWrite(13, HIGH); //LED to show motion mode activated
+  //Serial.println("Done!\n");
+  pinMode(rotate_pin, INPUT_PULLUP);
+  pinMode(shoot_pin, INPUT_PULLUP);
+  //attachInterrupt(0,rotation,CHANGE);
+  //attachInterrupt(1,shoot,CHANGE);
+  
+  //Serial.println(F("Calculating offsets, do not move MPU6050"));
+  mpu.calcOffsets(true,true); // gyro and accelero
+}
+
+void flashing(byte i, byte j, byte k){
+for(byte i=0;i<k;i++){
+digitalWrite(13, HIGH);
+delay(i);
+digitalWrite(13,LOW);
+delay(j);}
+}
+
+void rotate_detect(){
+  mpu.update();
+  if(millis() - timer > 500){ // print data every second
+    x_angle=mpu.getAngleX();
+    //y_angle=mpu.getAngleY();
+    delta_x=x_angle-x_ori_angle;
+    //delta_y=y_angle-y_ori_angle;
+    if (delta_x<-15){command[0]=2;} //AW
+    else if (delta_x>15){command[0]=1;} //CW
+    else {command[1]=0;} 
+    delta_x=abs(delta_x);
+    if (70<delta_x){command[1]=9;}
+    else if(15<delta_x){command[1]=map(delta_x, 15, 70, 0, 9);}
+    //else if (60<delta_y){command[1]=4;}
+    //else if (45<delta_y){command[1]=3;}
+    //else if (30<delta_y){command[1]=2;}
+    //else if (15<delta_y){command[1]=1;}
+    if (command[1]==pre_val){}
+    else {Serial.write(command,2);pre_val=command[1];}
+    timer = millis();
+  }
+}
+
+void shoot_detect(){
+  mpu.update();
+    //x_acc=mpu.getGyroX();
+    //y_acc=mpu.getGyroY();
+    z_acc=mpu.getGyroZ();
+    xyz_acc=abs(z_acc);//abs(x_acc)+abs(y_acc);//+abs(z_acc);
+    xyz_acc=xyz_acc/30;
+    if(xyz_acc>acc_max){acc_max=xyz_acc;}
+    //delta_xyz=delta_x+delta_y+delta_z;
+}
+
+void loop() {
+if (digitalRead(rotate_pin)==0)
+{rotating=1;mpu.update();
+  x_ori_angle=mpu.getAngleX();
+  //y_ori_angle=mpu.getAngleY();
+  //z_ori_angle=mpu.getAngleZ(); 
+while(rotating)
+{
+rotate_detect();
+if (digitalRead(rotate_pin)){rotating=0;}//{command[0]=0;Serial.write(command,3);rotating=0;}// to stop in rotate detect in order to enable rotating shoot
+}
+  }
+if (digitalRead(shoot_pin)==0)
+{
+if(millis() - timer > 150){ // print data every second
+shooting=1;
+command[0]=3;
+while(shooting)
+{shoot_detect();
+if (digitalRead(shoot_pin)){shooting=0;}
+}
+command[1]=acc_max;acc_max=0;
+Serial.write(command,2);
+timer = millis();
+//Serial.print(command[0]);Serial.print(command[1]);Serial.println(command[2]);
+}
+}
+}
