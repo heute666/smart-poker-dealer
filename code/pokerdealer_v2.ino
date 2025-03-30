@@ -1,3 +1,4 @@
+//2.1.4 ISR rebuild
 //v2 to add encoder and oled on top
 //update on shooting timeout diagnose
 //#include <EEPROM.h>
@@ -229,7 +230,7 @@ volatile uint8_t cardout = 0;
 uint8_t totalcards = 0;
 uint8_t holdcards = 0;
 //byte index_acc; //to indicate the position in the speed table
-String SW_V = "241001";
+String SW_V = "250201";
 #ifdef record_time
   uint8_t t = 0;
   uint8_t duration[216];
@@ -392,7 +393,8 @@ void flashing(int i, int j, int k) {  //no led flash for v2-1
 }
 
 void out_sensor_change() {
-  loaded = !loaded;
+  if (loaded  == digitalRead(2))// double check if change edge error
+  {loaded = !loaded;} 
   //no matter what's previous status, start to accel
 }
 
@@ -428,7 +430,6 @@ ISR(TIMER1_COMPA_vect) {
   if (ticks)  //在ticks=1进行OCR1A赋值得到时长一致的ticks //tick0, 高电平起步才是完整第一步，这里只有半步，暂时没影响，不更改
   {
     PORTB ^= (1 << 1);  //00000010 异或，pin9在第二位
-    twice_coe = !twice_coe;
     if (twice_coe) {
       step_count++;
       if (step_count > loopstep) {
@@ -460,41 +461,41 @@ ISR(TIMER1_COMPA_vect) {
           break;
 
         case LOW_ACCEL:
-          if (index_low_acc == low_accel_step) {
+          if (index_low_acc < low_accel_step)
+          {index_low_acc++;
+          OCR1A = pgm_read_word_near(low_speed_table + index_low_acc);}          
+          else {
             if (high_accel_step) { flag = HIGH_ACCEL; }  //in case high_accel>0
             else {
               flag = CHECK;  //by highaccel step +1, flag change, and when check the actual step is accel step +2
             }
-          } else {
-            index_low_acc++;
-            OCR1A = pgm_read_word_near(low_speed_table + index_low_acc);
-          }
+          } 
           break;
 
         case HIGH_ACCEL:
-          if (index_high_acc == high_accel_step) {
+          if (index_high_acc < high_accel_step) 
+          {index_high_acc++;
+          OCR1A = pgm_read_word_near(high_speed_table + index_high_acc);}
+          else {
             flag = CHECK;
-          } else {
-            index_high_acc++;
-            OCR1A = pgm_read_word_near(high_speed_table + index_high_acc);
-          }
+          } 
           break;
 
         case HIGH_DECEL:
+          index_high_acc--;
+          OCR1A = pgm_read_word_near(high_speed_table + index_high_acc);
           if (index_high_acc == 0) {
             flag = LOW_DECEL;
-          } else {
-            index_high_acc--;
-            OCR1A = pgm_read_word_near(high_speed_table + index_high_acc);
-          }
+          } 
           break;
 
         case LOW_DECEL:
-          if (index_low_acc == 1) {
-            flag = STOP;
-          } else {
-            index_low_acc--;
-            OCR1A = pgm_read_word_near(low_speed_table + index_low_acc);
+          index_low_acc--;
+          OCR1A = pgm_read_word_near(low_speed_table + index_low_acc);
+          //if (low_decel_step){if(index_low_acc==low_decel_step){flag=CHECK;}}//to support motion control tuning;
+          if (index_low_acc == 0) {
+            flag = STOP; //to stop in case 0
+            //ticks=!ticks;// half step for the last
           }
           break;
 
@@ -512,6 +513,7 @@ ISR(TIMER1_COMPA_vect) {
           break;
       }
     }
+    twice_coe =!twice_coe;
     ticks = !ticks;
   } else {
     ticks = !ticks;  //在ticks=0 赋值,且初始电平为低电平时长为前后两种拼接
@@ -526,7 +528,7 @@ void speed_table_lookup() {
     } else {
       for (byte i = 255; i >= 0; i--)  //to check the maxfqy first
       {
-        if (maxfqy <= pgm_read_word_near(high_speed_table + i)) {
+        if (maxfqy <= pgm_read_word_near(high_speed_table + i)) { 
           high_accel_step = i;
           low_accel_step = 255;
           break;
@@ -534,9 +536,9 @@ void speed_table_lookup() {
       }
     }
   } else {
-    for (byte i = 255; i >= 0; i--)  //to check the maxfqy first
+    for (byte i = 255; i > 0; i--)  //to check the maxfqy first
     {
-      if (maxfqy <= pgm_read_word_near(low_speed_table + i)) {
+      if (maxfqy <= pgm_read_word_near(low_speed_table + i)) {//constrain accel_step>0; to avoid accel index ++ -- mistake
         low_accel_step = i;
         high_accel_step = 0;
         break;
@@ -653,6 +655,7 @@ void firstcard() {                                     //no timeout check yet, n
   //rotating = 1;
   flag = LOW_ACCEL;
   check_point = 0;
+  OCR1A = pgm_read_word_near(low_speed_table + 0);
   TIMSK1 |= (1 << OCIE1A);  //start to rotate
   while (check_point == 0)
     ;  //to reach the check point
@@ -872,14 +875,20 @@ void FC_print(byte i) {
   switch (i) {
     case 0:
       display.println(F("NOCARD"));
+      display.setCursor(64, 1);
+      display.println(cardout);
       face_error();
       break;  //display.setCursor(5, 24);display.println(string(holdcards + totalcards - cardout));display.setCursor(45, 24);display.println(F("MISSING"));
     case 1:
       display.println(F("LOADSTUCK"));
+      display.setCursor(64, 1);
+      display.println(cardout);
       face_sad();
       break;
     case 2:
       display.println(F("SHOOTERROR"));
+      display.setCursor(64, 1);
+      display.println(cardout);
       face_sleepy();
       break;
     case 6:
@@ -1156,6 +1165,7 @@ void startstop() {
   rotating = 1;
   digitalWrite(steperEN, 0);
   flag = LOW_ACCEL;
+  OCR1A = pgm_read_word_near(low_speed_table + 0);
   TIMSK1 |= (1 << OCIE1A);  //start to rotate
   while (rotating)
     ;  //{delay(500);Serial.print(flag);}
@@ -1226,8 +1236,12 @@ void random_mode() {
     digitalWrite(motora1, 0);
     while(!loaded);
     if (startover) {
+      return;}
+    shoot_check(250, 2);
+    if (startover) {
       return;
     }
+    cardout++;
   }
   digitalWrite(motora1, HIGH);
   byte j;
@@ -1272,12 +1286,17 @@ void random_mode() {
       startstop();
     }
     digitalWrite(motora1, 0);
-    shoot_check(250, 2);
+    shoot_check(200, 2);
     if (startover) { return; }
     cardout++;
     //Serial.print(cardout);
     if (cardout == totalcards) {
       FC_print(6);
+      return;
+    }
+    if (digitalRead(cardin))  //in case no more card, stop rolling imediately
+    {
+      FC_print(0);
       return;
     }
     load_check(250, 1);  //to put load in this condition, in case need to rotate, to load during the rotation to save 30ms
@@ -1352,7 +1371,6 @@ void modeset() {
   }
 }
 #endif
-
 void face_lowbat(){
       display.fillRoundRect(11, 53, 35, 5, 2, 1);
       display.fillRoundRect(84, 53, 35, 5, 2, 1);
